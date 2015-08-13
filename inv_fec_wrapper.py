@@ -20,7 +20,7 @@ header = (
 	"Total_Democratic_Donations,Democratic_Transactions,Democratic_Candidate_Transactions," + 
 	"Republican_Unique_Years,Democrate_Unique_Years," + 
 	"GVKey,datadate,fyear,indfmt,consol,popsrc,datafmt,conm,CURCD,ACT,ARTFS,AT,EMP,INVT," + 
-	"LCT,LT,RECT,REVT,SEQ,TIE,XSGA,COSTAT,SIC,NI,XRD,t1,SIC,SumAT,SumEBIT,AvgRoA"
+	"LCT,LT,RECT,REVT,SEQ,TIE,XSGA,COSTAT,SIC,NI,XRD,t1,SumAT,SumEBIT,AvgRoA"
 )
 
 ######################## Political Contributions #################
@@ -38,12 +38,6 @@ bwk = "Citations"
 inv = "Inventor"
 cls = "Class"
 gvkey = "GVKey"
-#Dependant rpt files
-inventor_rpt = "Inventor"
-fwd_rpt = "FwdCitations"
-bwk_rpt = "Citations"
-class_rpt = "Class"
-gvkey_rpt = "GVKey"
 #Transitional file names before combining JSON files
 patent_class_temp = "Patent_Class_Temp"
 patent_class_temp_fwd = "Patent_Class_Fwd"
@@ -53,9 +47,9 @@ patent_class_temp_success = "Patent_Class_Success"
 #filename for inventor patent dataset w/o classes for citations
 fileName2 = "inventor_patent_citations"
 
-######################## Firm Financials Data ####################
+######################## Firm Financials Data #####################
 firm_rpt = "Financial"
-#filename for inventor patent dataset w/o classes for citations
+#filename for firm financial data
 fileName3 = "firm_financials"
 
 ######################## FINAL MERGE FILE NAME ####################
@@ -126,24 +120,24 @@ if __name__ == "__main__":
 					response = sys.stdin.readline()
 					if "y" in response.lower():
 						#create class JSON file from .rpt
-						r = open("./time_inventor_series/" + class_rpt + ".rpt", "r")
-						patent_political_firm.class_rpt_json(r, class_rpt)
+						r = open("./time_inventor_series/" + cls + ".rpt", "r")
+						patent_political_firm.class_rpt_json(r, cls)
 						r.close()
 						#create inventor JSON file from .rpt
-						r = open("./time_inventor_series/" + inventor_rpt + ".rpt", "r")
-						patent_political_firm.inventor_rpt_json(r, inventor_rpt)
+						r = open("./time_inventor_series/" + inv + ".rpt", "r")
+						patent_political_firm.inventor_rpt_json(r, inv)
 						r.close()
 						#create fwd citations JSON file from .rpt
-						r = open("./time_inventor_series/" + fwd_rpt + ".rpt", "r")
-						patent_political_firm.citations_rpt_json(r, fwd_rpt)
+						r = open("./time_inventor_series/" + fwd + ".rpt", "r")
+						patent_political_firm.citations_rpt_json(r, fwd)
 						r.close()
 						#create bwk citations JSON file from .rpt
-						r = open("./time_inventor_series/" + bwk_rpt + ".rpt", "r")
-						patent_political_firm.citations_rpt_json(r, bwk_rpt)
+						r = open("./time_inventor_series/" + bwk + ".rpt", "r")
+						patent_political_firm.citations_rpt_json(r, bwk)
 						r.close()
 						#create gvkey JSON file from .rpt
-						r = open("./time_inventor_series/" + gvkey_rpt + ".rpt", "r")
-						patent_political_firm.gvkey_rpt_json(r, gvkey_rpt)
+						r = open("./time_inventor_series/" + gvkey + ".rpt", "r")
+						patent_political_firm.gvkey_rpt_json(r, gvkey)
 						r.close()
 
 					#user interactions

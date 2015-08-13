@@ -40,7 +40,8 @@ def merge_data_to_file(inv, firm, pol, f):
 		date = ""
 		arr = []
 		count = 0
-		matches = 0
+		gvkey_matches = 0
+		political = 0
 		line = ""
 		past_inv = ""
 		past_fwd = ""
@@ -49,7 +50,7 @@ def merge_data_to_file(inv, firm, pol, f):
 		i = {}
 		p = {}
 		#loop through inventors
-		for key in inv:
+		for key in sorted(inv):
 			#reset/update counts
 			r_consec_contr = "0"
 			d_consec_contr = "0"
@@ -57,12 +58,20 @@ def merge_data_to_file(inv, firm, pol, f):
 			#sort years
 			for year in inv[key]:
 				arr.append(int(year))
+
+
+
+			#HANDLE SIC2 CODE IS CURRENTLY NOT OPERABLE!!!!!!!!!!!!!!!
+
+
 			arr.sort()
 			year = str(arr[0])
 			#loop through inventors years/null years
 			while year <= str(arr[-1]):
+				line = ""
 				#default assumption of no financial data
-				financial = ",,,,,,,,,,,,,,,,,,,,,,,,,,,,,"
+				financial = (",NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL," + 
+					"NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL")
 				#handle patent data
 				if year in inv[key]:
 					#readability
@@ -76,16 +85,20 @@ def merge_data_to_file(inv, firm, pol, f):
 						"," + str(i["Past_Inv"]) + "," + str(i["Past_Fwd"]) + ","
 					)
 					#handle linking of financial data
-					if i["GVKey"]:
-						try:
-							matches = matches + 1
-							financial = i["GVKey"] + "," + firm[i["GVKey"]]
-						except KeyError:
-							matches = matches - 1
+					if i["GVKey"] and i["GVKey"] in firm:
+						gvkey_matches = gvkey_matches + 1
+						financial = i["GVKey"] + "," + firm[i["GVKey"]]
 				else:
-					line = (key + "," + year + ",0,,0,,0," + str(past[0]) + "," + str(past[1]) + ",")
+					#handles success variables for inventors inactive years
+					if str(int(year) - 1) in inv[key]:
+						past_inv = int(past[0]) + int(len(inv[key][str(int(year) - 1)]["Patent"]))
+						past_fwd = int(past[1]) + int(inv[key][str(int(year) - 1)]["Fwd"])
+					line = (key + "," + year + ",0,,0,,0," + str(past_inv) + "," + str(past_fwd) + ",")
 				#handle political contributions
 				if key in pol and year in pol[key]:
+					#tests non blank matches
+					if pol[key][year]["DEM"]["total_contr"] or pol[key][year]["REP"]["total_contr"]:
+						political = political + 1
 					#readability
 					r = pol[key][year]["REP"]
 					d = pol[key][year]["DEM"]
@@ -98,12 +111,13 @@ def merge_data_to_file(inv, firm, pol, f):
 					)
 				else:
 					line = (line + "0,0,0,0,0,0," + r_consec_contr + "," + d_consec_contr + ",")
+				#test for non-null values
 				line = line + financial
-				year = str(int(year) + 1)
-				#write line to file
+				line = re.sub('(,,)', ',NULL,', line)
 				f.write(line + "\n")
+				year = str(int(year) + 1)
 			#UI
-			count = progress(inv, count, matches)
+			count = progress(inv, count, gvkey_matches, political)
 	#handle exceptions
 	except Exception as e:
 		exception_helper(e)
@@ -134,7 +148,6 @@ def assign_success_vars(i, past_inv, past_fwd, year, year1):
 		past_fwd = str(i["Past_Fwd"])
 	#return tuple containing success variables
 	return (past_inv, past_fwd)
-
 
 ###############################################
 ############ Inventor Patent Data #############
@@ -213,6 +226,7 @@ def merge_gvkey(inv, gvkey, fileName):
 		count = 0
 		matches = 0
 		minimum = str(sys.maxint)
+		temp = {}
 		#loop through inventor dataset
 		for key in inv:
 			#loop through years
@@ -220,17 +234,27 @@ def merge_gvkey(inv, gvkey, fileName):
 				for patent in inv[key][year]["Patent"]:
 					#handle data formatting
 					patent = re.sub('[a-zA-Z]', '', patent)
-					if int(patent.lstrip("0")) < int(minimum):
-						minimum = patent
-					if minimum in gvkey:
-						#assigns first GVKey in terms of date
-						inv[key][year].update({"GVKey":gvkey[minimum]["GVKey"]})
+					patent = patent.lstrip("0")
+
+					#test code
+					if patent in gvkey:
 						matches = matches + 1
+
+					if int(patent) < int(minimum):
+						minimum = patent
+						if minimum in gvkey:
+							#stores first GVKey in terms of date
+							temp = {"GVKey":gvkey[minimum]["GVKey"]}
+					#DO THIS TWICE: to catch bad data, generate more matches
+					if minimum in gvkey:
+						#updates dictionary to store GVKey
+						inv[key][year].update(temp)
+						#matches = matches + 1
 					else:
 						inv[key][year].update({"GVKey":""})
 				minimum = str(sys.maxint)
 			#UI
-			count = progress(inv, count)
+			count = progress(inv, count, matches)
 		print "Finished JSON encoding for " + fileName + "..."
 		#put dictionary into json file
 		put_into_json(inv, fileName)
@@ -360,48 +384,48 @@ def inventor_political_contributions_dataset(con, fec, fileName):
 		d = {}
 		category = ""
 		party = ""
-		year = ""
 		total_contr = ""
 		party_trans = ""
 		candi_trans = ""
-		invnum = ""
-		#loop through fec dataset
-		for key in fec:
-			if key in con:
-				#store variables
-				category = con[key]["type"]
-				party = con[key]["party"]
-				invnum = fec[key]["invnum"]
-				year = fec[key]["year"]
-				#if data exists
-				try:
-					#update total contributions
-					total_contr = d[invnum][year][party]["total_contr"]
-					d[invnum][year][party]["total_contr"] = int(total_contr) + int(fec[key]["amount"])
-					#if candidate
-					if "h" in category.lower() or "p" in category.lower() or "s" in category.lower():
-						d[invnum][year][party]["candi_trans"] = int(d[invnum][year][party]["candi_trans"]) + 1
-					else:
-						d[invnum][year][party]["party_trans"] = int(d[invnum][year][party]["party_trans"]) + 1
-				except KeyError:
-					#set desired variables
-					total_contr = fec[key]["amount"]
-					year = fec[key]["year"]
-					#if candidate
-					if "h" in category.lower() or "p" in category.lower() or "s" in category.lower():
-						candi_trans = 1
-						party_trans = 0
-					else:
-						candi_trans = 0
-						party_trans = 1
-					#update dictionary
-					if invnum in d:
-						d[invnum].update({year:{"REP":{},"DEM":{}}})
-					else:
-						d[invnum] = {year:{"REP":{},"DEM":{}}}
-					d[invnum][year][party] = {"total_contr":total_contr, "party_trans":party_trans, "candi_trans":candi_trans}
-			else:
-				d[invnum] = {year:{"REP":{},"DEM":{}}}
+		#for each committee
+		for com in fec:
+			#for each inventor who donated to a committee
+			for inv in fec[com]:
+				#for each year inventor donated to the committee
+				for year in fec[com][inv]:
+					try:
+						#store committee variables
+						category = con[com]["type"]
+						party = con[com]["party"]
+						#update total contributions to committee
+						total_contr = int(d[inv][year][party]["total_contr"]) + int(fec[com][inv][year]["amount"])
+						d[inv][year][party]["total_contr"] = total_contr
+						#if candidate
+						if "h" in category.lower() or "p" in category.lower() or "s" in category.lower():
+							d[inv][year][party]["candi_trans"] = int(d[inv][year][party]["candi_trans"]) + 1
+						else:
+							d[inv][year][party]["party_trans"] = int(d[inv][year][party]["party_trans"]) + 1
+					except KeyError:
+						#if inventor donated REP/DEM that year
+						if com in con:
+							#set/update desired variables
+							total_contr = fec[com][inv][year]["amount"]
+							tuple1 = set_trans_var_helper(candi_trans, party_trans, category)
+							candi_trans = tuple1[0]
+							party_trans = tuple1[1]
+							#update dictionary
+							if inv in d:
+								#handles case where inventor donated to both parties in one year
+								if year not in d[inv]:
+									d[inv].update({year:{"REP":{},"DEM":{}}})
+							else:
+								d[inv] = {year:{"REP":{},"DEM":{}}}
+							d[inv][year][party] = {"total_contr":total_contr, "party_trans":party_trans, 
+								"candi_trans":candi_trans}
+						else:
+							#implies inventor donated to third party
+							if inv not in d:
+								d[inv] = {year:{"REP":{},"DEM":{}}}
 		#adds consecutive year donation variable
 		#dumps resulting dict into JSON file
 		inventor_political_contributions_concecutive_variable(d, fileName)
@@ -430,10 +454,10 @@ def inventor_political_contributions_concecutive_variable(d, fileName):
 		for key in d:
 			dem = 0
 			rep = 0
-			d_contr = 0
-			r_contr = 0
 			#loop through year at key
-			for year in d[key]:
+			for year in sorted(d[key]):
+				d_contr = 0
+				r_contr = 0
 				#set total contribution variables
 				if d[key][year]["REP"]:
 					r_contr = d[key][year]["REP"]["total_contr"] 
@@ -444,12 +468,17 @@ def inventor_political_contributions_concecutive_variable(d, fileName):
 						d[key][year]["REP"] = {"total_contr":r_contr, "party_trans":"0", "candi_trans":"0"}
 						d[key][year]["DEM"] = {"total_contr":d_contr, "party_trans":"0", "candi_trans":"0"}
 				else:
+					#assign values, update counts
 					if is_empty(d[key][year]["REP"]):
 						d[key][year]["REP"] = {"total_contr":r_contr, "party_trans":"0", "candi_trans":"0"}
 						dem = dem + 1
-					else:
+					elif is_empty(d[key][year]["DEM"]):
 						d[key][year]["DEM"] = {"total_contr":d_contr, "party_trans":"0", "candi_trans":"0"}
 						rep = rep + 1
+					else:
+						#handle case where inventor donated to both parties in same year
+						rep = rep + 1
+						dem = dem + 1
 				#update key value pairs
 				d[key][year]["REP"]["consecutive"] = rep
 				d[key][year]["DEM"]["consecutive"] = dem
@@ -475,6 +504,8 @@ def fec_data_json(f, fileName):
 		d = {}
 		arr = []
 		index = 0
+		amount = ""
+		#csv library handles delimeters within data
 		for arr in csv.reader(f, delimiter=',', quotechar='"'):
 			#handles rpt decoding
 			#line = rpt_decode_helper(",")
@@ -483,16 +514,27 @@ def fec_data_json(f, fileName):
 				#formats year i.e. 99, 02 into 1999, 2002
 				arr[17] = add_year_prefix(arr[17])
 				arr[1] = arr[1][:-1]
-				if arr[17] != "" and arr[17] != "15":
+				if arr[17] != "":
 					#tries to catch improperly formatted data
 					if len(arr) == 53:
-						try:
-							d[arr[1]] = {"year":arr[17], "invnum":arr[25], "amount":arr[19], "firm":arr[35]}
-						except KeyError:
-							#this error should never throw as keys are always unique
-							print "Fatal Error in " + fileName + " JSON transfer"
+						#if committe exists in dictionary
+						if arr[1] in d:
+							#if inventor in committee dictionary
+							if arr[25] in d[arr[1]]:
+								if arr[17] in d[arr[1]][arr[25]]:
+									#store amount of donation for readability
+									amount = d[arr[1]][arr[25]][arr[17]]["amount"]
+									d[arr[1]][arr[25]][arr[17]] = {"amount":int(amount) + int(arr[19])}
+								else:
+									d[arr[1]][arr[25]].update({arr[17]:{"amount":arr[19]}})
+							else:
+								d[arr[1]].update({arr[25]:{arr[17]:{"amount":arr[19]}}})
+						else:
+							#new key value pair
+							d[arr[1]] = {arr[25]:{arr[17]:{"amount":arr[19]}}}
 					else:
 						print len(arr) + " " + arr[17]
+						print "Indicates fundamental problem w/ .xslx file"
 			index += 1
 		print "Finished creating " + fileName + " object!"
 		#put dictionary into json file
@@ -524,7 +566,7 @@ def contributions_data_json(f, fileName):
 			#file is delimited by "|"
 			arr = line.split("|")
 			#arbitrary test to avoid blank data
-			if len(arr) == 15 and (arr[10] == "REP" or arr[10] == "DEM"):
+			if len(arr) == 15 and (arr[10].upper() == "REP" or arr[10].upper() == "DEM"):
 				try:
 					#attempts to add values to existing key-value pairs
 					d[arr[0]] = {"type":arr[9], "party":arr[10]}
@@ -617,13 +659,37 @@ def rpt_decode_helper(line):
 ###############################################
 ###############################################
 
+#Param candi_trans:
+#	integer counting number of transactions to candidates
+#
+#Param party_trans:
+#	integer counting number of transactions to party
+#
+#Param category:
+#	string representation of political position ((s|h|p) == candidate)
+#
+#RETURN:
+#	returns a tuple containing updated candi_trans and party_trans variables
+#
+def set_trans_var_helper(candi_trans, party_trans, category):
+	if "h" in category.lower() or "p" in category.lower() or "s" in category.lower():
+		candi_trans = 1
+		party_trans = 0
+	else:
+		candi_trans = 0
+		party_trans = 1
+	return (candi_trans, party_trans)
+
 #Param d:
 #	Dictionary object
 #
 #Param count
 #	Counts iterations over object
 #
-#Param matches
+#Param gvkey
+#	optional parameter to print
+#
+#Param political
 #	optional parameter to print
 #
 #POST:
@@ -633,11 +699,13 @@ def rpt_decode_helper(line):
 #RETURN:
 #	updates count variable +1
 #	
-def progress(d, count, matches=""):
-	if count % 100000 == 0 and count != 0:
+def progress(d, count, gvkey="", political=""):
+	if (count % 100000 == 0 or count == len(d) - 1) and count != 0:
 		string = "Finished " + str(count) + " of " + str(len(d))
-		if matches:
-			string = string + ", matches = " + str(matches)
+		if gvkey:
+			string = string + ", gvkey_matches = " + str(gvkey)
+		if political:
+			string = string + ", political_matches = " + str(political)
 		print string
 	return count + 1
 
